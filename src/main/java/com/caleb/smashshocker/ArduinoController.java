@@ -9,9 +9,8 @@ public class ArduinoController {
     SerialPort sp = null;
 
     public ArduinoController() {
-        sp = SerialPort.getCommPort("COM3"); // device name TODO: must be changed
-        sp.setComPortParameters(9600, 8, 1, 0); // default connection settings for Arduino
-        //sp.setComPortTimeouts(SerialPort.TIMEOUT_WRITE_BLOCKING, 0, 0); // block until bytes can be written
+        sp = SerialPort.getCommPort("COM3");
+        sp.setComPortParameters(9600, 8, 1, 0);
     }
 
     public boolean openPort() {

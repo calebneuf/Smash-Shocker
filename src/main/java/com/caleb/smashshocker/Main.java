@@ -49,37 +49,42 @@ public class Main {
 
     private static ArduinoController arduinoController;
 
-    private static Webcam webcam;
-
     public static void main(String[] args) throws Exception {
         System.out.println("Starting...");
         OpenCV.loadLocally();
 
-        int webcamNum = 0;
+        WebcamManager webcamManager = WebcamManager.getInstance();
+        if(!webcamManager.init()) {
+            System.out.println("Failed to initialize capture card");
+            return;
+        }
 
+        // Creates J Window
+        createWindow();
+
+        arduinoController = new ArduinoController();
+        if(arduinoController.openPort()) {
+            connected.setText("CONNECTED");
+        } else {
+            connected.setText("NOT CONNECTED");
+            System.out.println("Shock box failed to connect.");
+            System.exit(0);
+        }
         try {
-            for(Webcam webcams : Webcam.getWebcams()) {
-                if(webcams.getName().contains("HD60")) {
-                    webcam = webcams;
-                    break;
-                }
-            }
-        } catch (NullPointerException e) {
-            System.out.println("No webcam found");
-            System.exit(1);
+
+            runTask();
+
         }
-
-        if(webcam == null) {
-            System.out.println("No webcam found");
-            System.exit(1);
+        catch (TesseractException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (AWTException e) {
+            e.printStackTrace();
         }
+    }
 
-        System.out.println("Webcam found: " + webcam.getName());
-
-
-        webcam.open();
-
-
+    private static void createWindow() throws Exception {
         JFrame frame = new JFrame("Smash Shocker");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLayout(new FlowLayout());
@@ -115,7 +120,7 @@ public class Main {
         connected = new JLabel("NOT CONNECTED");
         gameStage = new JLabel("");
 
-        image = new JLabel(new ImageIcon(webcam.getImage()));
+        image = new JLabel(new ImageIcon(WebcamManager.getInstance().takeScreenShot()));
 
         frame.add(p1Damage);
         frame.add(p2Damage);
@@ -130,37 +135,12 @@ public class Main {
         damageLabels.put(2, p2Damage);
         damageLabels.put(3, p3Damage);
         damageLabels.put(4, p4Damage);
-
-
-
-
-        //Initialize OCR engine
-        tesseract = new Tesseract();
-        tesseract.setPageSegMode(8);
-        tesseract.setDatapath("./tessdata/");
-
-        arduinoController = new ArduinoController();
-        if(arduinoController.openPort()) {
-            connected.setText("CONNECTED");
-        } else {
-            connected.setText("NOT CONNECTED");
-            System.out.println("Shock box failed to connect.");
-            System.exit(0);
-        }
-        try {
-
-            runTask();
-
-        }
-        catch (TesseractException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (AWTException e) {
-            e.printStackTrace();
-        }
     }
 
+    /**
+     * Our main task that gets the screenshots and checks them
+     * @throws Exception
+     */
     public static void runTask() throws Exception {
         System.out.println("Running task...");
         Timer timer = new Timer();
@@ -179,7 +159,6 @@ public class Main {
             public void run() {
                 boolean playing = true;
                 BufferedImage screenCapture = null;
-                BufferedImage analysis = null;
                 Graphics2D g2d = null;
 
                 for(Map.Entry<Integer, Integer> damageCooldown : damageCooldowns.entrySet()) {
@@ -196,23 +175,14 @@ public class Main {
                     }
 
 
-                    screenCapture = takeScreenShot();
-//                        int time = getDecimalOfTimer(screenCapture);
-//                        if(lastTime == time) {
-//                            playing = false;
-//                        }
-//                        gameTime.setText("Clock Decimals: " + time);
-                    analysis = screenCapture;
-                    g2d = analysis.createGraphics();
+                    screenCapture = WebcamManager.getInstance().takeScreenShot();
 
                     g2d.setFont(new Font("Serif", Font.BOLD, 30));
-                    image.setIcon(new ImageIcon(analysis));
+                    image.setIcon(new ImageIcon(screenCapture));
 
                     double pauseScreenSimilarity = isPauseScreen(screenCapture);
 
                     double killScreenSimilarity = isKillScreen(screenCapture);
-
-
 
                     if(isCSS(screenCapture) <= 0.1) {
                         gameStage.setText("CSS");
@@ -295,26 +265,12 @@ public class Main {
                 iter++;
 
                 gameStage.setText("PLAYING");
-                long startTime = System.currentTimeMillis();
-                long screenshortStartTime = 0, screenShortEndTime = 0, filterStartTime = 0, filterEndTime= 0, fillStartTime = 0, fillEndTime = 0, ocrStartTime = 0, ocrEndTime = 0, damageStartTime = 0, damageEndTime = 0, totalEndTime = 0;
+
                 try {
-                    screenCapture = takeScreenShot();
-                    analysis = screenCapture.getSubimage(0, 0, 1920, 1080);
-                    g2d = analysis.createGraphics();
-                    g2d.setFont(new Font("Serif", Font.BOLD, 30));
-                    image.setIcon(new ImageIcon(analysis));
-                } catch (AWTException e) {
-                    e.printStackTrace();
+//                    screenCapture = takeScreenShot();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                fillStartTime = System.currentTimeMillis();
-                //fill(screenCapture);
-                fillEndTime = System.currentTimeMillis();
-
-//                g2d.setColor(Color.RED);
-//                g2d.drawString("PLAYING", 50, 50);
-                //g2d.;
 
                 for(ScreenPosition.PeriodPositions playerCategory : ScreenPosition.PeriodPositions.values()) {
                     if(!playerCategory.name().startsWith(convertNumberFrom(playerCount)))
@@ -331,40 +287,6 @@ public class Main {
 
 
                             BufferedImage cropped = getPlayerImage(position.getDamagePosition(), screenCapture);
-
-//                            g2d.setColor(Color.BLUE);
-//                            g2d.drawRect(position.getDamagePosition().getX(), position.getDamagePosition().getY(), position.getDamagePosition().getWidth(), position.getDamagePosition().getHeight());
-
-
-//                            try {
-//                                if (playerNum == 1) {
-//                                    if (p1Image == null) {
-//                                        p1Image = new JFrame("Player 1");
-//                                        p1Image.setContentPane(new JLabel(new ImageIcon(scale(cropped, 20, false))));
-//                                        p1Image.pack();
-//                                        p1Image.setVisible(true);
-//                                        p1Image.setAlwaysOnTop(true);
-//                                        p1Image.setLocation(500, 0);
-//                                    } else {
-//                                        p1Image.setContentPane(new JLabel(new ImageIcon(scale(cropped, 20, false))));
-//                                        p1Image.pack();
-//                                    }
-//                                } else if (playerNum == 2) {
-//                                    if (p2Image == null) {
-//                                        p2Image = new JFrame("Player 2");
-//                                        p2Image.setContentPane(new JLabel(new ImageIcon(scale(cropped, 20, false))));
-//                                        p2Image.pack();
-//                                        p2Image.setVisible(true);
-//                                        p2Image.setAlwaysOnTop(true);
-//                                        p2Image.setLocation(600, 0);
-//                                    } else {
-//                                        p2Image.setContentPane(new JLabel(new ImageIcon(scale(cropped, 20, false))));
-//                                        p2Image.pack();
-//                                    }
-//                                }
-//                            } catch (Exception e) {
-//                                //e.printStackTrace();
-//                            }
                             int color = getAverageColor(cropped).getRGB();
                             int currentColor = playerDamageColors.getOrDefault(playerNum, 0);
 
@@ -440,34 +362,6 @@ public class Main {
 
                 }
 
-//                try {
-//                    ocrStartTime = System.currentTimeMillis();
-//                    HashMap<Integer, Integer> updated = getPlayerDamages(finalPlayerCount, screenCapture);
-//                    ocrEndTime = System.currentTimeMillis();
-//                    for(Map.Entry<Integer, Integer> entry : updated.entrySet()) {
-//                        if(playerDamages.getOrDefault(entry.getKey(), 0) != entry.getValue()) {
-//                            if(entry.getValue() > playerDamages.getOrDefault(entry.getKey(), 0) && Math.abs(playerDamages.getOrDefault(entry.getKey(), 0) - entry.getValue()) < 40) {
-//                                arduinoController.sendChar(entry.getKey());
-//                            }
-//
-//                            damageLabels.get(entry.getKey()).setText("P" + entry.getKey() + ": " + (entry.getValue() == -1 ? "DEAD" : entry.getValue() + "%"));
-//                            playerDamages.put(entry.getKey(), entry.getValue());
-//                        }
-//                    }
-//                } catch (IOException e) {
-//                    e.printStackTrace();
-//                } catch (TesseractException e) {
-//                    e.printStackTrace();
-//                }
-//                long endTime = System.currentTimeMillis();
-//                System.out.println("Time taken: " + (endTime - startTime) + "ms");
-//                System.out.println("ScreenShot: " + (screenShortEndTime - screenshortStartTime) + "ms");
-//                System.out.println("Filter: " + (filterEndTime - filterStartTime) + "ms");
-//                System.out.println("Fill: " + (fillEndTime - fillStartTime) + "ms");
-//                System.out.println("OCR: " + (ocrEndTime - ocrStartTime) + "ms");
-//                System.out.println("Damage: " + (damageEndTime - damageStartTime) + "ms");
-//                System.out.println("Total: " + (totalEndTime - startTime) + "ms");
-
             }
         }, 0, INTERVAL);
     }
@@ -516,15 +410,6 @@ public class Main {
         return getDistanceBetweenColors(new Color(color), new Color(16776447));
     }
 
-
-    public static void logImage(String filename, BufferedImage image) {
-        try {
-            ImageIO.write(image, "png", new File(filename));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     public static double getDistanceBetweenColors(Color color1, Color color2) {
         int red1 = color1.getRed();
         int green1 = color1.getGreen();
@@ -535,8 +420,7 @@ public class Main {
         int blue2 = color2.getBlue();
 
         double distance = Math.sqrt(Math.pow(red1 - red2, 2) + Math.pow(green1 - green2, 2) + Math.pow(blue1 - blue2, 2));
-        double percentage = distance / Math.sqrt(Math.pow(255, 2) + Math.pow(255, 2) + Math.pow(255, 2));
-        return percentage;
+        return distance / Math.sqrt(Math.pow(255, 2) + Math.pow(255, 2) + Math.pow(255, 2));
     }
 
     public static double getDistanceBetweenColors(int color1, int color2) {
@@ -559,115 +443,7 @@ public class Main {
                 }
             }
         }
-        int dim = bi.getWidth()*bi.getHeight();
-        // Log.info("step=" + step + " sampled " + sampled + " out f " + dim + " pixels (" + String.format("%.1f", (float)(100*sampled/dim)) + " %)");
         return new Color(Math.round(sumr / sampled), Math.round(sumg / sampled), Math.round(sumb / sampled));
-    }
-
-    public static HashMap<Integer, Integer> getPlayerDamages(int playerCount, BufferedImage image) throws IOException, TesseractException {
-        HashMap<Integer, Integer> playerDamages = new HashMap<>();
-
-        BufferedImage fullImage = null;
-        for(ScreenPosition.DamagePositions playerCategory : ScreenPosition.DamagePositions.values()) {
-            if(!playerCategory.name().endsWith("ONE"))
-                continue;
-            if(!playerCategory.name().startsWith(convertNumberFrom(playerCount)))
-                continue;
-            ArrayList<BufferedImage> playerImages = new ArrayList<>();
-            for(ScreenPosition.DamagePositions damagePosition : ScreenPosition.DamagePositions.values()) {
-                if(!damagePosition.name().split("_")[0].equals(playerCategory.name().split("_")[0]))
-                    continue;
-                BufferedImage cropped = getPlayerImage(damagePosition.getDamagePosition(), image);
-                cropped = scale(cropped, 5, true);
-                playerImages.add(cropped);
-
-
-
-
-//                if(fullImage == null) {
-//                    fullImage = cropped;
-//                }
-//                else {
-//                    fullImage = joinBufferedImage(fullImage, cropped);
-//                }
-
-
-            }
-            long ocrStartTime = System.currentTimeMillis();
-
-            final int[] index = {1};
-
-            playerImages.stream().parallel().forEach( playerImage ->
-                    {
-                        Tesseract1 instance = new Tesseract1();;
-                        try {
-                            String text = instance.doOCR(playerImage).replaceAll("[^0-9]", "");
-//                            if(text.isEmpty()) {
-//                                //playerDamages.put(convertNumber(damagePosition.name().split("_")[2]), -1);
-//                                continue;
-//                            }
-                            playerDamages.put(index[0], Integer.parseInt(text));
-//convertNumber(damagePosition.name().split("_")[2])
-                        } catch (TesseractException e) {
-                            e.printStackTrace();
-                        }
-                        index[0]++;
-                    }
-            );
-            long ocrEndTime = System.currentTimeMillis();
-
-            System.out.println("OCR: " + (ocrEndTime - ocrStartTime) + "ms");
-
-//            for(BufferedImage playerImage : playerImages) {
-//                Tesseract1 tesseract1 = new Tesseract1();
-////                 = tesseract.doOCR(playerImage).replaceAll("[^0-9]", "");
-//                if(text.isEmpty()) {
-//                    //playerDamages.put(convertNumber(damagePosition.name().split("_")[2]), -1);
-//                    continue;
-//                }
-//            }
-        }
-//        long ocrStartTime = System.currentTimeMillis();
-//        String text = tesseract.doOCR(fullImage); //.replaceAll("[^0-9]", "")
-//        long ocrEndTime = System.currentTimeMillis();
-//        System.out.println("JOIN OCR: " + (ocrEndTime - ocrStartTime) + "ms");
-//        System.out.println("Joined image text: " + text);
-        return playerDamages;
-    }
-
-    static BufferedImage Mat2BufferedImage(Mat matrix)throws Exception {
-        MatOfByte mob=new MatOfByte();
-        try {
-            Imgcodecs.imencode(".jpg", matrix, mob);
-
-        } catch (CvException e) {
-            System.err.println("Exception: " + e);
-        }
-        byte ba[]=mob.toArray();
-
-        BufferedImage bi=ImageIO.read(new ByteArrayInputStream(ba));
-        return bi;
-    }
-
-    public static BufferedImage joinBufferedImage(BufferedImage img1,BufferedImage img2) {
-
-        //do some calculate first
-        int offset  = 5;
-        int wid = img1.getWidth()+img2.getWidth()+offset;
-        int height = Math.max(img1.getHeight(),img2.getHeight())+offset;
-        //create a new buffer and draw two image into the new image
-        BufferedImage newImage = new BufferedImage(wid,height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = newImage.createGraphics();
-        Color oldColor = g2.getColor();
-        //fill background
-        g2.setPaint(Color.WHITE);
-        g2.fillRect(0, 0, wid, height);
-        //draw image
-        g2.setColor(oldColor);
-        g2.drawImage(img1, null, 0, 0);
-        g2.drawImage(img2, null, img1.getWidth()+offset, 0);
-        g2.dispose();
-        return newImage;
     }
 
     public static int convertNumber(String string) {
@@ -698,32 +474,8 @@ public class Main {
         return "ZERO";
     }
 
-    public static BufferedImage takeScreenShot() throws Exception {
-
-        if(webcam != null) {
-            return webcam.getImage();
-        }
-
-        Rectangle screenRect = new Rectangle(0, 0, 0, 0);
-        for (GraphicsDevice gd : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            screenRect = gd.getDefaultConfiguration().getBounds();
-        }
-        BufferedImage capture = new Robot().createScreenCapture(screenRect);
-        if(capture.getWidth() != 1920 || capture.getHeight() != 1080) {
-            capture = resizeImage(capture, 1920, 1920);
-        }
-//        JFrame window = new JFrame();
-//        window.getContentPane().add(new JLabel(new ImageIcon(capture)));
-//        window.pack();
-//        window.setVisible(true);
-
-        return capture;
-    }
 
 
-    public static BufferedImage resizeImage(BufferedImage originalImage, int targetWidth, int targetHeight) throws Exception {
-        return Scalr.resize(originalImage, Scalr.Method.AUTOMATIC, Scalr.Mode.AUTOMATIC, targetWidth, targetHeight, Scalr.OP_ANTIALIAS);
-    }
 
     private static int countPlayers(BufferedImage bufferedImage) throws TesseractException, IOException {
         ScreenPosition.DamagePositions highestResults = null;
@@ -974,11 +726,6 @@ public class Main {
         for (int x = 0; x < image.getWidth(); ++x) {
             Fill.floodFill(image, x, 0, Color.white, Color.BLACK);
         }
-//        inner: for (int y = image.getHeight() - 1; y > 0; --y) {
-//            if(image.getRGB(x, y) != Color.black.getRGB()) {
-//                image.setRGB(x, y, Color.black.getRGB());
-//            } else continue outer;
-//        }
     }
 
     public static void fillSide(BufferedImage image, int xPos, int yPos) {
