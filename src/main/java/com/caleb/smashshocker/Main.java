@@ -225,7 +225,7 @@ public class Main {
 
 
                     if(playing) {
-                        BufferedImage filtered = applyFilters(screenCapture);
+                        BufferedImage filtered = ImageProcessing.applyFilters(screenCapture);
                         playerCount = countPlayers2(screenCapture);
                         if (playerCount == 0)
                             timesNA++;
@@ -491,7 +491,7 @@ public class Main {
                 if(!damagePosition.name().split("_")[0].equals(playerCategory.name().split("_")[0]))
                     continue;
                 BufferedImage cropped = getPlayerImage(damagePosition.getDamagePosition(), bufferedImage);
-                cropped = scale(cropped, 5, true);
+                cropped = ImageProcessing.scale(cropped, 5, true);
                 fill(cropped);
                 playerImages.add(cropped);
 
@@ -539,8 +539,6 @@ public class Main {
     public static int countPlayers2(BufferedImage bufferedImage) throws IOException {
         ScreenPosition.PlayerPositions highestResults = null;
         int highestCount = 0;
-//        System.out.println("PLAYER COUNT TESTS");
-//        System.out.println(String.format("%-7s%6s%4s", "Count", "P#", "%"));
         int playerCount = 1;
         for(ScreenPosition.PlayerPositions playerCategory : ScreenPosition.PlayerPositions.values()) {
             int score = 0;
@@ -564,14 +562,8 @@ public class Main {
                 double differenceFromPlayer = getDistanceBetweenColors(color, playerPosition.getColor());
                 double differenceFromCPU= getDistanceBetweenColors(color, -5261384);
 
-//                if(differenceFromPlayer <= 0.15 || (!playerPosition.name().endsWith("ONE") && differenceFromCPU <= 0.1)) {
                 if(differenceFromPlayer <= 0.15 || differenceFromCPU <= 0.1) {
-//                    System.out.println("Score increased for " + playerPosition.name() + " by 1" + " (" + differenceFromPlayer + ", " + differenceFromCPU + ")");
                     score++;
-                } else {
-//                    System.out.println(playerPosition.name());
-//                    System.out.println("Difference from Player: " + differenceFromPlayer + " (" + color + ")");
-//                    System.out.println("Difference from CPU: " + differenceFromCPU);
                 }
             }
 
@@ -581,9 +573,6 @@ public class Main {
                 highestCount = score;
                 highestResults = playerCategory;
             }
-//            if(score == playerCount) {
-//                return playerCount;
-//            }
         }
         if(highestResults == null)
             return 0;
@@ -598,129 +587,10 @@ public class Main {
         return 0;
     }
 
-    private static int getDecimalOfTimer(BufferedImage bufferedImage) throws TesseractException, IOException {
-        ScreenPosition timerPosition = new ScreenPosition(1813, 65, 50,35);
-        BufferedImage cropped = getPlayerImage(timerPosition, bufferedImage);
-        cropped = scale(cropped, 5, true);
-        fill(cropped);
-        String text = tesseract.doOCR(cropped).replaceAll("[^0-9]", "");
-        if(text.isEmpty())
-            return 0;
-        return Integer.parseInt(text);
-    }
-
     private static BufferedImage getPlayerImage(ScreenPosition position, BufferedImage bufferedImage) throws IOException {
         return bufferedImage.getSubimage(position.getX(), position.getY(), position.getWidth(), position.getHeight());
     }
 
-
-    private static BufferedImage applyFilters(BufferedImage image) {
-        BufferedImage newImage = ImageHelper.convertImageToGrayscale(image);
-        gaussianNoise(newImage);
-        binarize(newImage);
-        return newImage;
-    }
-
-    public static void display(BufferedImage image){
-        JFrame frame=new JFrame();
-        frame.setTitle("Sample");
-        frame.setSize(image.getWidth(), image.getHeight());
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        JLabel label=new JLabel();
-        label.setIcon(new ImageIcon(image));
-        frame.getContentPane().add(label,BorderLayout.CENTER);
-
-
-        frame.setLocationRelativeTo(null);
-        frame.pack();
-        frame.setVisible(true);
-    }
-
-    public static void display(BufferedImage image, String text){
-        JFrame frame=new JFrame();
-        frame.setTitle("Sample");
-        frame.setSize(image.getWidth() * 3, image.getHeight() * 3);
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        JLabel label=new JLabel();
-        label.setIcon(new ImageIcon(image));
-        frame.getContentPane().add(label,BorderLayout.CENTER);
-        JLabel label2=new JLabel();
-        label2.setText(text);
-        frame.getContentPane().add(label2,BorderLayout.SOUTH);
-        frame.setLocationRelativeTo(null);
-        frame.pack();
-        frame.setVisible(true);
-    }
-
-
-    public static void binarize(BufferedImage image) {
-        for (int i = 0; i < image.getWidth(); i++)
-            for (int j = 0; j < image.getHeight(); j++)
-                image.setRGB(i, j, gamma(image.getRGB(i, j)) > 127 ? Color.white.getRGB() : Color.black.getRGB());
-    }
-
-    static int gamma(int rgb) {
-        return (red(rgb) + green(rgb) + blue(rgb)) / 3;
-    }
-
-    static int red(int rgb) {
-        return (rgb >> 16) & 0x000000FF;
-    }
-
-    static int green(int rgb) {
-        return (rgb >> 8) & 0x000000FF;
-    }
-
-    static int blue(int rgb) {
-        return (rgb) & 0x000000FF;
-    }
-
-    protected static BufferedImage gaussianNoise(BufferedImage image) {
-        Raster source = image.getRaster ();
-        BufferedImage output = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        WritableRaster out = output.getRaster ();
-        double stdDev = 10.0;
-        int currVal;// the current value
-        double newVal;// the new "noisy" value
-        double gaussian;// gaussian number
-        int bands = out.getNumBands ();// number of bands
-        int width = image.getWidth ();// width of the image
-        int height = image.getHeight ();// height of the image
-        java.util.Random randGen = new java.util.Random ();
-        for (int j = 0;j < height;j ++) {
-            for (int i = 0;i < width;i ++) {
-                gaussian = randGen.nextGaussian ();
-                for (int b = 0;b < bands;b ++) {
-                    newVal = stdDev * gaussian;
-                    currVal = source.getSample (i, j, b);
-                    newVal = newVal + currVal;
-                    if (newVal < 0) newVal = 0.0;
-                    if (newVal > 255) newVal = 255.0;
-                    out.setSample (i, j, b, (int) (newVal));
-                }
-            }
-        }
-        return output;
-    }
-
-
-    public static BufferedImage scale(BufferedImage source, double scale, boolean bilinearFiltering){
-        try{
-            BufferedImage destination = new BufferedImage((int)(source.getWidth() * scale), (int)(source.getHeight() * scale), source.getType());
-            AffineTransform at = new AffineTransform();
-            at.scale(scale, scale);
-            AffineTransformOp scaleOp = new AffineTransformOp(at, getInterpolationType(bilinearFiltering));
-            return scaleOp.filter(source, destination);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private static int getInterpolationType(boolean bilinearFiltering){
-        return bilinearFiltering ? AffineTransformOp.TYPE_BILINEAR : AffineTransformOp.TYPE_NEAREST_NEIGHBOR;
-    }
 
     public static void fill(BufferedImage image) {
         for (int x = 0; x < image.getWidth(); ++x) {
